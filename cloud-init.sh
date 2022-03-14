@@ -1,6 +1,7 @@
 #! /bin/bash
 
 # Update node
+rm -rf /etc/yum.repos.d/*
 sudo yum -y update
 
 # Register system with Red Hat

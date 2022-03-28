@@ -23,7 +23,7 @@ data "aws_ami" "rhel" {
 # Create Bastion EC2 Instance
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.rhel.id
-  instance_type               = "t2.small"
+  instance_type               = "m4.xlarge"
   iam_instance_profile        = aws_iam_instance_profile.ocp311_master_profile.id
   key_name                    = aws_key_pair.default.key_name
   subnet_id                   = aws_subnet.public_subnet.id
@@ -33,8 +33,16 @@ resource "aws_instance" "bastion" {
     aws_security_group.ocp311_vpc.id,
     aws_security_group.ocp311_public_egress.id
   ]
-
-  user_data = data.template_file.cloud-init.rendered
+  root_block_device {
+    volume_type = "gp2"
+    volume_size = 200
+  }
+  ebs_block_device {
+    volume_type = "gp2"
+    device_name = "/dev/sdf"
+    volume_size = 80
+  }
+  user_data = data.template_file.cloud-init-bastion.rendered
 
   tags = merge(
     local.common_tags,
@@ -50,10 +58,10 @@ resource "aws_instance" "bastion" {
     host        = self.public_ip
   }
 
-  provisioner "file" {
-    content     = data.template_file.inventory.rendered
-    destination = "~/inventory.yaml"
-  }
+  # provisioner "file" {
+  #   content     = data.template_file.inventory.rendered
+  #   destination = "~/inventory.yaml"
+  # }
 
   provisioner "file" {
     content     = file(var.ssh_private_key_path)
@@ -69,9 +77,7 @@ resource "aws_instance" "master" {
   key_name             = aws_key_pair.default.key_name
   subnet_id            = aws_subnet.private_subnet.id
   vpc_security_group_ids = [
-    aws_security_group.ocp311_vpc.id,
-    aws_security_group.ocp311_public_ingress.id,
-    aws_security_group.ocp311_public_egress.id
+    aws_security_group.ocp311_vpc.id
   ]
   root_block_device {
     volume_type = "gp2"
@@ -83,7 +89,7 @@ resource "aws_instance" "master" {
     volume_size = 80
   }
 
-  user_data = data.template_file.cloud-init.rendered
+  user_data = data.template_file.cloud-init-master.rendered
 
   tags = merge(
     local.common_tags,
@@ -101,9 +107,7 @@ resource "aws_instance" "node" {
   key_name             = aws_key_pair.default.key_name
   subnet_id            = aws_subnet.private_subnet.id
   vpc_security_group_ids = [
-    aws_security_group.ocp311_vpc.id,
-    aws_security_group.ocp311_public_ingress.id,
-    aws_security_group.ocp311_public_egress.id
+    aws_security_group.ocp311_vpc.id
   ]
   root_block_device {
     volume_type = "gp2"
@@ -115,7 +119,7 @@ resource "aws_instance" "node" {
     volume_size = 80
   }
 
-  user_data = data.template_file.cloud-init.rendered
+  user_data = data.template_file.cloud-init-node.rendered
 
   tags = merge(
     local.common_tags,

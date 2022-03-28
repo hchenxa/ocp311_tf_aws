@@ -12,21 +12,31 @@ ansible_ssh_user=ec2-user
 ansible_become=true
 
 # Deployment type; Set to "origin" to deploy the OKD variant
-openshift_deployment_type=${openshift_deployment_type}
+openshift_deployment_type=openshift-enterprise
 openshift_release=v3.11
+openshift_enable_origin_repo=false
+
 
 ${openshift_deployment_type == "openshift-enterprise" ? "#" : ""}openshift_additional_repos=[{'id': 'openshift-origin-v3.11', 'name': 'openshift-origin-v3.11', 'baseurl': 'https://artifacts-rpms-openshift-origin-ci-rpms.apps.ci.l2s4.p1.openshiftapps.com/openshift-origin-v3.11', 'gpgcheck': '0', 'enabled': '1'}]
 ${openshift_deployment_type == "openshift-enterprise" ? "" : "#"}oreg_auth_user=${rh_subscription_username}
 ${openshift_deployment_type == "openshift-enterprise" ? "" : "#"}oreg_auth_password=${rh_subscription_password}
 
+oreg_url=${bastion_ip}:5000/openshift3/ose-$\{component\}:$\{version\}
+openshift_examples_modify_imagestreams=true
+openshift_enable_origin_repo=false
+openshift_epel_rpm_url=http://${bastion_ip}/repos/epel-release-latest-7.noarch.rpm
+openshift_docker_hosted_registry_insecure=true
+openshift_docker_hosted_registry_network=${bastion_ip}:5000
+openshift_docker_insecure_registries=${bastion_ip}:5000
+openshift_master_bootstrap_auto_approve=true
 # AWS configuration
-openshift_cloudprovider_kind=aws
-openshift_clusterid=${cluster_id}
-openshift_cloudprovider_aws_access_key=${aws_access_key_id}
-openshift_cloudprovider_aws_secret_key=${aws_secret_access_key}
+#openshift_cloudprovider_kind=aws
+#openshift_clusterid=${cluster_id}
+#openshift_cloudprovider_aws_access_key=${aws_access_key_id}
+#openshift_cloudprovider_aws_secret_key=${aws_secret_access_key}
 
 # DNS Hostnames
-openshift_master_cluster_public_hostname=${public_hostname}
+#openshift_master_cluster_public_hostname=${public_hostname}
 openshift_master_default_subdomain=${public_subdomain}
 
 # Enable htpasswd authentication

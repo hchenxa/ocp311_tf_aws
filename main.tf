@@ -37,6 +37,7 @@ data "template_file" "inventory" {
     rh_subscription_password  = var.rh_subscription_password
     public_hostname           = local.cluster_master_domain
     public_subdomain          = local.cluster_subdomain
+    bastion_ip                = aws_instance.bastion.private_ip
     master_hostname           = aws_instance.master.private_dns
     node_hostname             = aws_instance.node.private_dns
   }
@@ -54,9 +55,9 @@ resource "aws_key_pair" "default" {
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #   INSTANCE INITIALIZATION SCRIPT   #
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
-# Cloud-Init script to register and update nodes
-data "template_file" "cloud-init" {
-  template = file("./cloud-init.sh")
+# Cloud-Init script to register and update bastion
+data "template_file" "cloud-init-bastion" {
+  template = file("./cloud-init-bastion.sh")
   vars = {
     openshift_deployment_type = var.openshift_deployment_type
     rh_subscription_username  = var.rh_subscription_username
@@ -65,6 +66,37 @@ data "template_file" "cloud-init" {
     skip_install              = var.skip_install
   }
 }
+
+# Cloud-Init script to register and update nodes
+data "template_file" "cloud-init-master" {
+  template = file("./cloud-init-master.sh")
+  vars = {
+    bastion_ip = aws_instance.bastion.private_ip
+    skip_install              = var.skip_install
+  }
+}
+
+# Cloud-Init script to register and update nodes
+data "template_file" "cloud-init-node" {
+  template = file("./cloud-init-node.sh")
+  vars = {
+    bastion_ip = aws_instance.bastion.private_ip
+    master_ip = aws_instance.master.private_ip
+    master_hostname = aws_instance.master.private_dns
+    skip_install              = var.skip_install
+  }
+}
+
+# render the docker-images
+data "template_file" "ocp311-docker-image" {
+  template = file("./docker-image.sh")
+  vars = {
+    image_version = var.ocp_image_tag
+    bastion_ip = aws_instance.bastion.private_ip
+    ocp_image_pull_secret = var.ocp_pull_secret
+  }
+}
+
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 #        INSTALL OCP        #
@@ -91,7 +123,53 @@ resource "null_resource" "ocp_install" {
     command = "echo === WAITING FOR HOST REBOOT...; count=10; while ! $(ssh -o StrictHostKeyChecking=no -i ${var.ssh_private_key_path} ec2-user@${aws_instance.bastion.public_dns} exit); do sleep 15; if [ $count -eq 0 ]; then exit 1; fi; echo RETRYING...$((count-=1)) tries remaining...; done"
   }
 
-  # Prep Bastion for OCP Install
+  # Prepare the Bastion host
+  provisioner "remote-exec" {
+    inline = [
+      "echo === INSTALLING THE REQUIRED PACAKGE",
+      "chmod 0600 /home/ec2-user/.ssh/id_rsa",
+      "sudo yum install -y yum-utils createrepo docker git httpd squid"
+    ]
+  }
+
+  # Prepare and populate the repository server
+  provisioner "remote-exec" {
+    inline = [
+      "echo === PREPARE AND POPOLATE THE REPOSITORY SERVER",
+      "sudo mkdir -p /var/www/html/repos",
+      "sudo reposync --gpgcheck -lm --repoid=rhel-7-server-rpms --download_path=/var/www/html/repos",
+      "sudo createrepo -v /var/www/html/repos/rhel-7-server-rpms -o /var/www/html/repos/rhel-7-server-rpms",
+      "sudo reposync --gpgcheck -lm --repoid=rhel-7-server-extras-rpms --download_path=/var/www/html/repos",
+      "sudo createrepo -v /var/www/html/repos/rhel-7-server-extras-rpms -o /var/www/html/repos/rhel-7-server-extras-rpms",
+      "sudo reposync --gpgcheck -lm --repoid=rhel-7-server-ansible-2.9-rpms --download_path=/var/www/html/repos",
+      "sudo createrepo -v /var/www/html/repos/rhel-7-server-ansible-2.9-rpms -o /var/www/html/repos/rhel-7-server-ansible-2.9-rpms",
+      "sudo reposync --gpgcheck -lm --repoid=rhel-7-server-ose-3.11-rpms --download_path=/var/www/html/repos",
+      "sudo createrepo -v /var/www/html/repos/rhel-7-server-ose-3.11-rpms -o /var/www/html/repos/rhel-7-server-ose-3.11-rpms",
+      "sudo chmod -R +r /var/www/html/repos; sudo restorecon -vR /var/www/html",
+      "sudo systemctl enable httpd; sudo systemctl start httpd"
+    ]
+  }
+
+  # Pull Docker images
+  provisioner "remote-exec" {
+    inline = [
+      "echo === START TO PULL OCP311 IMAGES",
+      "echo ${data.template_file.ocp311-docker-image.rendered} > /tmp/ocp311-docker-image.sh",
+      "sudo chmod a+x /tmp/ocp311-docker-image.sh"
+    ]
+  }
+  provisioner "remote-exec" {
+    inline = [
+      "echo === EXECUTE THE SCRIPTS",
+      "bash -x /tmp/ocp311-docker-image.sh"
+    ]
+  }
+  # Prepare the inventory file
+  provisioner "file" {
+    content     = data.template_file.inventory.rendered
+    destination = "~/inventory.yaml"
+  }
+
   provisioner "remote-exec" {
     inline = [
       "echo === PREPPING BASTION FOR OCP INSTALL...",
@@ -101,7 +179,6 @@ resource "null_resource" "ocp_install" {
     ]
   }
 
-  # Install OCP prerequisites
   provisioner "remote-exec" {
     inline = [
       "echo === INSTALLING OCP PREREQUISITES...",
@@ -110,7 +187,6 @@ resource "null_resource" "ocp_install" {
     ]
   }
 
-  # Install OCP
   provisioner "remote-exec" {
     inline = [
       "echo === INSTALLING OCP...",

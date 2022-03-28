@@ -96,3 +96,14 @@ variable private_subnet_cidr {
   default     = "10.0.16.0/20"
 }
 
+variable ocp_image_tag {
+  type = string
+  description = "the ocp311 image tagging"
+  default = "v3.11.634"
+}
+
+variable ocp_pull_secret {
+  type = string
+  description = "the ocp image pull secret"
+  default = ""
+}

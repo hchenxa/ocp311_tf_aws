@@ -1,4 +1,4 @@
-#! /bin/bash
+#!/bin/bash
 
 set -x
 echo "{\"insecure-registries\":[\"${bastion_ip}:5000\"]}" > /home/ec2-user/docker-daemon.json
@@ -13,6 +13,7 @@ echo ${ocp_image_pull_secret} > /home/ec2-user/image_pull_secret
 sudo cp /home/ec2-user/image_pull_secret /root/.docker/config.json
 
 sudo docker run -d --net=host --restart=always --name registry registry:2
+package_version=$(sudo yum info atomic-openshift-node.x86_64 | grep Version| awk -F ':' '{print $2}')
 
 images="openshift3/apb-base 
 openshift3/apb-tools 
@@ -70,14 +71,16 @@ openshift3/registry-console
 openshift3/snapshot-controller 
 openshift3/snapshot-provisioner
 openshift3/oauth-proxy
-openshift3/prometheus"
+openshift3/prometheus
+openshift3/prometheus-alertmanager
+openshift3/prometheus-node-exporter"
 
 for image in $images
 do
-    sudo docker pull registry.redhat.io/$image:${image_version}
-    sudo docker tag registry.redhat.io/$image:${image_version} ${bastion_ip}:5000/$image:${image_version}
-    sudo docker tag registry.redhat.io/$image:${image_version} ${bastion_ip}:5000/$image:v3.11
-    sudo docker push ${bastion_ip}:5000/$image:${image_version}
+    sudo docker pull registry.redhat.io/$image:v$package_version
+    sudo docker tag registry.redhat.io/$image:v$package_version ${bastion_ip}:5000/$image:v$package_version
+    sudo docker tag registry.redhat.io/$image:v$package_version ${bastion_ip}:5000/$image:v3.11
+    sudo docker push ${bastion_ip}:5000/$image:v$package_version
     sudo docker push ${bastion_ip}:5000/$image:v3.11
 done
 

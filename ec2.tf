@@ -40,7 +40,7 @@ resource "aws_instance" "bastion" {
   ebs_block_device {
     volume_type = "gp2"
     device_name = "/dev/sdf"
-    volume_size = 80
+    volume_size = 150
   }
   user_data = data.template_file.cloud-init-bastion.rendered
 

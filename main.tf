@@ -91,7 +91,6 @@ data "template_file" "cloud-init-node" {
 data "template_file" "ocp311-docker-image" {
   template = file("./docker-image.sh")
   vars = {
-    image_version = var.ocp_image_tag
     bastion_ip = aws_instance.bastion.private_ip
     ocp_image_pull_secret = var.ocp_pull_secret
   }
@@ -128,7 +127,7 @@ resource "null_resource" "ocp_install" {
     inline = [
       "echo === INSTALLING THE REQUIRED PACAKGE",
       "chmod 0600 /home/ec2-user/.ssh/id_rsa",
-      "sudo yum install -y yum-utils createrepo docker git httpd squid"
+      "sudo yum install -y yum-utils createrepo docker git httpd wget"
     ]
   }
 

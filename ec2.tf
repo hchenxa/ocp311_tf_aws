@@ -1,7 +1,7 @@
 # Define and query for the RHEL 7.9 AMI
 data "aws_ami" "rhel" {
   most_recent = true
-  owners      = ["679593333241"] # Red Hat's account ID
+  owners      = ["309956199498"] # Red Hat's account ID
   filter {
     name   = "architecture"
     values = ["x86_64"]
@@ -16,7 +16,7 @@ data "aws_ami" "rhel" {
   }
   filter {
     name   = "name"
-    values = ["RHEL-7.9.0_*GA*"]
+    values = ["RHEL-7.9_HVM*"]
   }
 }
 
